@@ -27,8 +27,46 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  
+  //CarCollection in database 
+
+  const carsCollection = client.db("CarHub").collection("cars");
+
+
+  //jwt token related APi
+
+
+  //car post related APi
+app.post('/cars',async(req,res)=>{
+  const newCar = req.body;
+  const result = await carsCollection.insertOne(newCar);
+  res.send(result);
+});
+
+app.get('/allCars',async(req,res)=>{
+  const cursor = carsCollection.find();
+  const result = await cursor.toArray();
+  res.send(result);
+})
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   } catch (err) {
     console.error("Failed to connect to MongoDB:", err);
   }
