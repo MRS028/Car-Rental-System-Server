@@ -8,9 +8,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 const upload = multer();
+
 
 // Home route
 app.get("/", (req, res) => {
@@ -30,165 +31,252 @@ const client = new MongoClient(uri, {
 
 function run() {
   // MongoDB connection
-  client.connect().then(() => {
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  client
+    .connect()
+    .then(() => {
+      console.log(
+        "Pinged your deployment. You successfully connected to MongoDB!"
+      );
 
-    // CarCollection in database
-    const carsCollection = client.db("CarHub").collection("cars");
+      // CarCollection in database
+      const carsCollection = client.db("CarHub").collection("cars");
+      //booking collection
+      const bookingCarCollection = client.db("CarHub").collection("bookingCar");
 
-    // POST API for adding a new car
-    app.post('/cars', upload.array('images'), async (req, res) => {
-      const { model, price, availability, registrationNumber, features, description, location, date, bookingStatus, userName, userEmail } = req.body;
-      const images = req.files.map((file) => ({
-        filename: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        path: file.path, 
-        data: file.buffer.toString('base64'), 
-      }));
-    
-      const newCar = {
-        model,
-        price,
-        availability,
-        registrationNumber,
-        features,
-        description,
-        location,
-        date,
-        bookingStatus,
-        userDetails: { name: userName, email: userEmail },
-        images, 
-      };
-    
-      const result = await carsCollection.insertOne(newCar);
-      res.send(result);
-    });
-    //Update Car option
-    app.put("/cars/:id", upload.array("images", 5), (req, res) => {
-      const carId = req.params.id;
-    
-      let objectId;
-      try {
-        objectId = new ObjectId(carId); // Properly instantiate ObjectId
-      } catch (error) {
-        return res.status(400).json({ message: "Invalid car ID format" });
-      }
-    
-      const {
-        model,
-        price,
-        availability,
-        registrationNumber,
-        features,
-        description,
-        location,
-        date,
-        bookingStatus,
-        userName,
-        userEmail,
-      } = req.body;
-    
-      const images = req.files.map((file) => ({
-        filename: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        path: file.path, 
-        data: file.buffer.toString('base64'), 
-      }));
-    
-    
-      const updatedCar = {
-        ...(model && { model }),
-        ...(price && { price }),
-        ...(availability && { availability }),
-        ...(registrationNumber && { registrationNumber }),
-        ...(features && { features }),
-        ...(description && { description }),
-        ...(location && { location }),
-        ...(date && { date }),
-        ...(bookingStatus && { bookingStatus }),
-        ...(userName || userEmail ? { userDetails: { name: userName, email: userEmail } } : {}),
-        ...(images.length > 0 && { images }),
-      };
-    
-      carsCollection
-        .updateOne({ _id: objectId }, { $set: updatedCar })
-        .then((result) => {
-          if (result.modifiedCount === 0) {
-            return res.status(404).json({ message: "Car not found or no changes made" });
+
+      // POST API for adding a new car
+      app.post("/cars", upload.array("images"), async (req, res) => {
+        const carData = {
+          model: req.body.model,
+          price: req.body.price,
+          availability: req.body.availability,
+          registrationNumber: req.body.registrationNumber,
+          features: req.body.features,
+          seats: req.body.seats,
+          description: req.body.description,
+          location: req.body.location,
+          date: req.body.date,
+          bookingCount: req.body.bookingCount,
+          bookingStatus: req.body.bookingStatus,
+          userDetails: {
+            name: req.body.userName,
+            email: req.body.userEmail,
+          },
+          images: req.files.map((file) => ({
+            filename: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            path: file.path,
+            data: file.buffer.toString("base64"),
+          })),
+        };
+
+        // const images = req.files.map((file) => ({
+        //   filename: file.originalname,
+        //   mimetype: file.mimetype,
+        //   size: file.size,
+        //   path: file.path,
+        //   data: file.buffer.toString("base64"),
+        // }));
+
+        const result = await carsCollection.insertOne(carData);
+        res.send(result);
+      });
+
+      //Update Car option
+      app.put("/cars/:id", upload.array("images", 5), (req, res) => {
+        const carId = req.params.id;
+      
+        if (!ObjectId.isValid(carId)) {
+          return res.status(400).json({ message: "Invalid car ID format" });
+        }
+      
+        const objectId = new ObjectId(carId);
+        const {
+          model,
+          price,
+          availability,
+          registrationNumber,
+          features,
+          seats,
+          description,
+          location,
+          date,
+          bookingStatus,
+          userName,
+          userEmail,
+        } = req.body;
+      
+        const images = req.files.map((file) => ({
+          filename: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          path: file.path,
+          data: file.buffer.toString("base64"),
+        }));
+  
+        const updatedCar = {
+          ...(model && { model }),
+          ...(price && { price }),
+          ...(availability && { availability }),
+          ...(registrationNumber && { registrationNumber }),
+          ...(features && { features }),
+          ...(seats && { seats }),
+          ...(description && { description }),
+          ...(location && { location }),
+          ...(date && { date }),
+          ...(bookingStatus && { bookingStatus }),
+          ...(userName || userEmail
+            ? { userDetails: { name: userName, email: userEmail } }
+            : {}),
+          ...(images.length > 0 && { images }),
+        };
+      
+        carsCollection
+          .updateOne({ _id: objectId }, { $set: updatedCar })
+          .then((result) => {
+            if (result.modifiedCount === 0) {
+              return res
+                .status(404)
+                .json({ message: "Car not found or no changes made" });
+            }
+            res.status(200).json({ message: "Car updated successfully" });
+          })
+          .catch((error) => {
+            console.error("Error updating car:", error);
+            res
+              .status(500)
+              .json({ message: "Failed to update car", error: error.message });
+          });
+      });
+      
+
+      // GET API to fetch all cars
+      app.get("/allCars", (req, res) => {
+        carsCollection
+          .find()
+          .toArray()
+          .then((result) => {
+            res.status(200).send(result);
+          })
+          .catch((error) => {
+            console.error("Error fetching cars:", error);
+            res.status(500).send({
+              success: false,
+              message: "Failed to fetch cars.",
+              error: error.message,
+            });
+          });
+      });
+
+      app.get("/cars/:id", async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await carsCollection.findOne(query);
+
+        res.send(result);
+      });
+
+      //My Cars section
+      app.get("/myCars", async (req, res) => {
+        const email = req.query.email;
+
+        const query = { "userDetails.email": email };
+        const result = await carsCollection.find(query).toArray();
+
+        res.send(result);
+      });
+
+      //delete a car
+
+      app.delete("/cars/:id", async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+
+        const result = await carsCollection.deleteOne(query);
+        res.send(result);
+      });
+      //book a car part
+
+      //book car post
+      app.post('/bookingCar', (req, res) => {
+        const bookACar = req.body;
+      
+        carsCollection.findOne({ registrationNumber: bookACar.registrationNumber })
+          .then(car => {
+            if (!car) {
+              return res.status(404).send('Car not found');
+            }
+      
+            const bookingData = {
+              ...bookACar,
+              carInfo: {
+                images: car.images, 
+                registrationNumber: car.registrationNumber,
+                bookingStatus: car.bookingStatus,
+                price: car.price,
+                model : car.model,
+              },
+            };
+      
+            return bookingCarCollection.insertOne(bookingData);
+          })
+          .then(result => {
+            res.send(result);
+          })
+          .catch(error => {
+            console.error("Error in booking a car:", error);
+            res.status(500).send('Internal Server Error');
+          });
+      });
+
+      //my bookings
+      app.get("/myBookings", async (req, res) => {
+        const email = req.query.email;
+        const query = {"email": email };
+
+        const result = await bookingCarCollection.find(query).toArray();
+
+        res.send(result);
+      });
+
+      //update Booking date
+      app.put('/updateBooking/:id', async (req, res) => {
+        const { id } = req.params;
+        const updateBookingDate = req.body;
+        
+        const filter = { _id: new ObjectId(id) };
+        const updateBookingDetails = {
+          $set: {
+            bookingStatus: updateBookingDate.bookingStatus, 
+            pickUpDate: updateBookingDate.pickUpDate, 
+            dropOffDate: updateBookingDate.dropOffDate, 
           }
-          res.status(200).json({ message: "Car updated successfully" });
-        })
-        .catch((error) => {
-          console.error("Error updating car:", error);
-          res.status(500).json({ message: "Failed to update car", error: error.message });
-        });
-    });
-    
+        };
+        const result = await bookingCarCollection.updateOne(filter, updateBookingDetails);
+        res.send({ message: "Booking updated", updatedBooking: result });
+      
+        
+      });
+      
+   
+      
 
-    // GET API to fetch all cars
-    app.get("/allCars", (req, res) => {
-      carsCollection
-        .find()
-        .toArray()
-        .then((result) => {
-          res.status(200).send(result);
-        })
-        .catch((error) => {
-          console.error("Error fetching cars:", error);
-          res.status(500).send({ success: false, message: "Failed to fetch cars.", error: error.message });
-        });
-    });
+      
+      
 
-    app.get('/cars/:id', async(req,res)=>{
-      const id = req.params.id;
-      const query ={_id: new ObjectId(id)};
-      const result = await carsCollection.findOne(query);
 
-      res.send(result);
+
+
+
+
+
+
+      //Last
     })
-
-    //My Cars section
-    app.get('/myCars', async (req, res) => {
-      const email = req.query.email; 
-      if (!email) {
-        return res.status(400).json({ message: "Email query parameter is required" });
-      }
-      const query = { 'userDetails.email': email }; 
-      const result = await carsCollection.find(query).toArray();
-      if (result.length === 0) {
-        return res.status(404).json({ message: "No cars found for this email" });
-      }
-      res.send(result); 
+    .catch((err) => {
+      console.error("Failed to connect to MongoDB:", err);
     });
-
-
-    //delete a car
-
-    app.delete('/cars/:id',async(req,res)=>{
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-
-      const result = await carsCollection.deleteOne(query);
-      res.send(result);
-    })
-
-    
-    
-    
-
-
-
-
-
-
-
-
-    //Last
-  }).catch((err) => {
-    console.error("Failed to connect to MongoDB:", err);
-  });
 }
 
 run();
