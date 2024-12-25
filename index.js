@@ -1,21 +1,50 @@
 const express = require("express");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const multer = require("multer");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 // Middleware
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://car-rental-system-b10a11.web.app",
+      "https://car-rental-system-b10a11.firebaseapp.com",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 const upload = multer();
+app.use(cookieParser());
 
 // Home route
 app.get("/", (req, res) => {
   res.send("Your favourite Car is waiting for you...");
 });
+
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+  // console.log("Token inside the verify token:", token);
+
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+  jwt,
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+      if (err) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      req.user = decoded;
+      next();
+    });
+};
 
 // MongoDB connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.q3w3t.mongodb.net/?retryWrites=true&w=majority`;
@@ -41,6 +70,36 @@ function run() {
       const carsCollection = client.db("CarHub").collection("cars");
       //booking collection
       const bookingCarCollection = client.db("CarHub").collection("bookingCar");
+
+      //JWT Auth part
+
+      app.post("/jwt", async (req, res) => {
+        const user = req.body;
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+          expiresIn: "5h",
+        });
+
+        res
+          .cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+            maxAge: 5 * 60 * 60 * 1000,
+          })
+          .send({ success: true });
+      });
+
+      //logout jwt token
+
+      app.post("/logout", (req, res) => {
+        res
+          .clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+          })
+          .send({ success: true });
+      });
 
       // POST API for adding a new car
       app.post("/cars", upload.array("images"), async (req, res) => {
@@ -189,10 +248,14 @@ function run() {
       });
 
       //My Cars section
-      app.get("/myCars", async (req, res) => {
+      app.get("/myCars", verifyToken, async (req, res) => {
         const email = req.query.email;
 
         const query = { "userDetails.email": email };
+
+        if (req.user.email !== req.query.email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
         const result = await carsCollection.find(query).toArray();
 
         res.send(result);
@@ -236,9 +299,14 @@ function run() {
       });
 
       //my bookings
-      app.get("/myBookings", async (req, res) => {
+      app.get("/myBookings", verifyToken, async (req, res) => {
         const email = req.query.email;
         const query = { email: email };
+
+        console.log(req.cookies?.token);
+        if (req.user.email !== req.query.email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
 
         const result = await bookingCarCollection.find(query).toArray();
 
