@@ -16,6 +16,7 @@ app.use(
       "http://localhost:5173",
       "https://car-rental-system-b10a11.web.app",
       "https://car-rental-system-b10a11.firebaseapp.com",
+      "https://car-rental-syestem-b10a11.netlify.app",
     ],
     credentials: true,
   })
