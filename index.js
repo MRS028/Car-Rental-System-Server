@@ -363,6 +363,13 @@ function run() {
 
       return res.status(404).json({ message: "Car not found" });
     });
+    //Delete a booking
+    app.delete('/bookingcar/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id : new ObjectId(id)};
+      const result = await bookingCarCollection.deleteOne(query);
+      res.send(result);
+    })
 
     //Last
   } finally {
